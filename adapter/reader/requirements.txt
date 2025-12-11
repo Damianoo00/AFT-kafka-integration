@@ -1,0 +1,4 @@
+Flask>=2.2
+confluent-kafka>=2.2.0
+gunicorn>=20.1
+requests>=2.31.0
