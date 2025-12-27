@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Kafka Writer API
+  version: 1.0.0
+  description: >
+    Kafka Writer is a lightweight REST service responsible for producing
+    messages to Kafka topics.
+    
+    It exposes HTTP endpoints that allow:
+      - writing messages to existing Kafka topics
+      - creating Kafka topics on demand
+    
+    The service validates topic existence before producing messages
+    and uses a short-lived in-memory cache to reduce metadata calls.
+
+servers:
+  - url: http://localhost:5000
+    description: Kafka Writer Service
+
+tags:
+  - name: kafka
+    description: Kafka write and topic management operations
+
+paths:
+  /write:
+    post:
+      tags: [kafka]
+      summary: Write message to Kafka topic
+      description: >
+        Produces a single message to an existing Kafka topic.
+        
+        The service verifies that the topic exists before sending
+        the message. Messages are sent synchronously
+        (producer.flush is called before returning).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WriteRequest"
+      responses:
+        "200":
+          description: Message successfully written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WriteResponse"
+        "400":
+          description: Invalid request or topic does not exist
+        "500":
+          description: Kafka produce error
+
+  /topic:
+    post:
+      tags: [kafka]
+      summary: Create Kafka topic
+      description: >
+        Creates a new Kafka topic with a single partition
+        and replication factor equal to one.
+        
+        If the topic already exists, the request is treated as successful
+        and no error is returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTopicRequest"
+      responses:
+        "200":
+          description: Topic created or already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTopicResponse"
+        "400":
+          description: Topic creation failed
+
+components:
+  schemas:
+    WriteRequest:
+      type: object
+      required:
+        - topic
+        - message
+      properties:
+        topic:
+          type: string
+          description: Target Kafka topic name
+          example: test-topic
+        message:
+          type: string
+          description: Message payload to be produced to Kafka
+          example: '{"event":"order_executed","symbol":"EURUSD"}'
+
+    WriteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: ok
+
+    CreateTopicRequest:
+      type: object
+      required:
+        - topic
+      properties:
+        topic:
+          type: string
+          description: Name of the Kafka topic to create
+          example: test-topic
+
+    CreateTopicResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Topic 'test-topic' created.

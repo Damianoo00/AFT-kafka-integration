@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+  title: Kafka Reader Ingest API
+  version: 1.0.0
+  description: >
+    Kafka Reader Ingest API defines the REST contract used by the Kafka Reader
+    service to forward messages consumed from Kafka topics to downstream
+    services (e.g. Writer / Storage / Processor).
+    
+    The Kafka Reader polls a Kafka topic at a configurable interval and sends
+    each consumed message as a JSON payload to this API endpoint.
+
+servers:
+  - url: http://localhost:5000
+    description: Writer / Ingest Service
+
+tags:
+  - name: ingest
+    description: Kafka message ingestion
+
+paths:
+  /receive:
+    post:
+      tags: [ingest]
+      summary: Receive Kafka message
+      description: >
+        Receives a single message consumed from Kafka.
+        
+        The Kafka Reader forwards:
+          - the Kafka topic name
+          - the raw message payload (as string)
+        
+        This endpoint is expected to be idempotent or handle
+        duplicate messages depending on consumer configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KafkaMessage"
+      responses:
+        "200":
+          description: Message successfully received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AckResponse"
+        "400":
+          description: Invalid request payload
+        "500":
+          description: Internal processing error
+
+components:
+  schemas:
+    KafkaMessage:
+      type: object
+      required:
+        - topic
+        - message
+      properties:
+        topic:
+          type: string
+          description: Kafka topic name from which the message was consumed
+          example: test-topic
+        message:
+          type: string
+          description: Raw Kafka message payload (UTF-8 decoded)
+          example: '{"event":"trade_executed","symbol":"EURUSD","volume":0.2}'
+
+    AckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        received_at:
+          type: string
+          format: date-time
+          example: "2025-03-01T12:00:00Z"

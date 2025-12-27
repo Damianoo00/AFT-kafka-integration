@@ -62,3 +62,20 @@ services:
       - writer
     networks:
       - kafka-net
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.17.14
+    restart: always
+    environment:
+      URLS: |
+        [
+          { "name": "Kafka Reader API", "url": "/openapi/openapi-kafka-reader.yaml" },
+          { "name": "Kafka Writer API", "url": "/openapi/openapi-kafka-writer.yaml" }
+        ]
+      URLS_PRIMARY_NAME: "Kafka API"
+    ports:
+      - "7010:8080"
+    volumes:
+      - ./openapi:/usr/share/nginx/html/openapi
+    networks:
+      - kafka-net
