@@ -1,17 +1,14 @@
 openapi: 3.0.3
 info:
   title: Kafka Writer API
-  version: 1.0.0
+  version: 1.0.1
   description: >
     Kafka Writer is a lightweight REST service responsible for producing
     messages to Kafka topics.
-    
+
     It exposes HTTP endpoints that allow:
-      - writing messages to existing Kafka topics
+      - writing messages to Kafka topics (auto-creating them if missing)
       - creating Kafka topics on demand
-    
-    The service validates topic existence before producing messages
-    and uses a short-lived in-memory cache to reduce metadata calls.
 
 servers:
   - url: http://localhost:5000
@@ -27,17 +24,25 @@ paths:
       tags: [kafka]
       summary: Write message to Kafka topic
       description: >
-        Produces a single message to an existing Kafka topic.
+        Produces a single message to a Kafka topic.
         
-        The service verifies that the topic exists before sending
-        the message. Messages are sent synchronously
-        (producer.flush is called before returning).
+        If the topic does not exist, it is created automatically.
+        The request body may contain arbitrary JSON, which is sent
+        as the Kafka message payload.
+      parameters:
+        - name: topic
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Target Kafka topic name
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WriteRequest"
+              description: Arbitrary JSON payload to send to Kafka
+              type: object
       responses:
         "200":
           description: Message successfully written
@@ -46,7 +51,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/WriteResponse"
         "400":
-          description: Invalid request or topic does not exist
+          description: Missing `topic` query parameter or invalid JSON
         "500":
           description: Kafka produce error
 
@@ -57,9 +62,8 @@ paths:
       description: >
         Creates a new Kafka topic with a single partition
         and replication factor equal to one.
-        
-        If the topic already exists, the request is treated as successful
-        and no error is returned.
+
+        If the topic already exists, no error is returned.
       requestBody:
         required: true
         content:
@@ -78,21 +82,6 @@ paths:
 
 components:
   schemas:
-    WriteRequest:
-      type: object
-      required:
-        - topic
-        - message
-      properties:
-        topic:
-          type: string
-          description: Target Kafka topic name
-          example: test-topic
-        message:
-          type: string
-          description: Message payload to be produced to Kafka
-          example: '{"event":"order_executed","symbol":"EURUSD"}'
-
     WriteResponse:
       type: object
       properties:
@@ -107,7 +96,7 @@ components:
       properties:
         topic:
           type: string
-          description: Name of the Kafka topic to create
+          description: Kafka topic name to create
           example: test-topic
 
     CreateTopicResponse:
@@ -115,4 +104,4 @@ components:
       properties:
         message:
           type: string
-          example: Topic 'test-topic' created.
+          example: "Topic 'test-topic' created."

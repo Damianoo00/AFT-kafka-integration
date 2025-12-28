@@ -3,6 +3,8 @@ version: "3.9"
 networks:
   kafka-net:
     driver: bridge
+  aft-external-net:
+    external: true
 
 services:
   broker:
@@ -30,36 +32,47 @@ services:
     networks:
       - kafka-net
 
-  writer:
+  kafka-writer:
     build:
       context: ./adapter/writer
       dockerfile: Dockerfile
-    container_name: writer
+    container_name: kafka-writer
     restart: unless-stopped
     ports:
-      - 5000:5000
+      - 9000:5000
     environment:
       KAFKA_BOOTSTRAP: broker:29092
     depends_on:
       - broker
     networks:
       - kafka-net
+      - aft-external-net
 
-  reader:
+  kafka-reader:
     build:
       context: ./adapter/reader
       dockerfile: Dockerfile
-    container_name: reader
+    container_name: kafka-reader
     restart: unless-stopped
     environment:
       KAFKA_BOOTSTRAP: broker:29092
       TOPIC: test-topic
-      API_URL: http://192.168.11.238:5002/write
-      PERIOD: 5
+      API_URL: http://test:5000/print
+      PERIOD: 1
       GROUP_ID: reader-group
+      WINDOW_SIZE: 10
     depends_on:
       - broker
-      - writer
+    networks:
+      - kafka-net
+      - aft-external-net
+
+  test:
+    build:
+      context: ./test
+      dockerfile: Dockerfile
+    container_name: test
+    restart: unless-stopped
     networks:
       - kafka-net
 
@@ -70,12 +83,11 @@ services:
       URLS: |
         [
           { "name": "Kafka Reader API", "url": "/openapi/openapi-kafka-reader.yaml" },
-          { "name": "Kafka Writer API", "url": "/openapi/openapi-kafka-writer.yaml" }
+          { "name": "Kafka Writer API", "url": "/openapi/openapi-kafka-writer.yaml" },
+          { "name": "Kafka Print Service", "url": "/openapi/openapi-kafka-test.yaml" }
         ]
       URLS_PRIMARY_NAME: "Kafka API"
     ports:
-      - "7010:8080"
+      - "9010:8080"
     volumes:
       - ./openapi:/usr/share/nginx/html/openapi
-    networks:
-      - kafka-net

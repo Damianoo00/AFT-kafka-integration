@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: Kafka Print Service
+  version: 1.0.0
+  description: >
+    Print Service is a minimal utility API that accepts arbitrary JSON payloads
+    and logs them for inspection or debugging.
+
+    It does not persist or forward the received data.
+    Its primary purpose is to allow Kafka Reader or Writer services
+    to send test payloads and observe their structure.
+
+servers:
+  - url: http://localhost:9000
+    description: Print / Debug Service
+
+tags:
+  - name: debug
+    description: Debugging and payload inspection
+
+paths:
+  /print:
+    post:
+      tags: [debug]
+      summary: Log arbitrary JSON payload
+      description: >
+        Accepts any JSON payload and logs it to stdout / application logs.
+        
+        Useful as a debug endpoint to inspect what other services send.
+        The service returns a static acknowledgment and does not validate
+        nor transform the input payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Arbitrary JSON payload to log
+              example:
+                foo: bar
+                price: 1.234
+                list: [1,2,3]
+      responses:
+        "200":
+          description: Payload logged successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrintResponse"
+        "400":
+          description: Missing or invalid JSON payload
+        "500":
+          description: Internal processing error
+
+components:
+  schemas:
+    PrintResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok

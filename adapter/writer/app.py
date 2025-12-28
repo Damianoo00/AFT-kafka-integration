@@ -3,6 +3,8 @@ from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic, KafkaException, KafkaError
 import time
 import os
+import requests
+import json
 
 app = Flask(__name__)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "broker:29092")
@@ -53,32 +55,7 @@ def topic_exists(topic_name: str, timeout: float = 5.0) -> bool:
 
     return True
 
-
-@app.route("/write", methods=["POST"])
-def write_kafka():
-    obj = request.get_json()
-    topic_name = obj["topic"]
-    message = obj["message"]
-
-    if not topic_exists(topic_name):
-        return {"error": "Topic nie istnieje", "topic": topic_name}, 400
-
-    try:
-        producer.produce(topic_name, message.encode(), callback=delivery_report)
-        # Poczekaj na wywołanie callbacków — daj dłuższy timeout jeśli trzeba
-        producer.flush(10)
-    except Exception as e:
-        app.logger.exception("Błąd przy wysyłaniu wiadomości: %s", e)
-        return {"error": "Błąd przy wysyłaniu wiadomości", "detail": str(e)}, 500
-
-    return {"message": "ok"}
-
-
-@app.route("/topic", methods=["POST"])
-def create_topic_in_kafka():
-    obj = request.get_json()
-    topic_name = obj["topic"]
-
+def create_topic(topic_name):
     topic = NewTopic(
         topic=topic_name,
         num_partitions=1,
@@ -102,3 +79,29 @@ def create_topic_in_kafka():
                 return {"message": f"Topic '{t}' już istnieje — ignoruję."}
             else:
                 return {"error": str(e)}, 400
+
+@app.route("/write", methods=["POST"])
+def write_kafka():
+    topic_name = request.args.get("topic")
+    obj = request.get_json()
+    if not topic_name:
+        return {"error": "Brak parametru 'topic' w query (?topic=...)"}, 400
+    if not topic_exists(topic_name):
+        create_topic(topic_name)
+
+    try:
+        payload = json.dumps(obj).encode("utf-8")
+        producer.produce(topic_name, payload, callback=delivery_report)
+        producer.flush(10)
+    except Exception as e:
+        app.logger.exception("Błąd przy wysyłaniu wiadomości: %s", e)
+        return {"error": "Błąd przy wysyłaniu wiadomości", "detail": str(e)}, 500
+
+    return {"message": "ok"}
+
+
+@app.route("/topic", methods=["POST"])
+def create_topic_in_kafka():
+    obj = request.get_json()
+    topic_name = obj["topic"]
+    return create_topic(topic_name)

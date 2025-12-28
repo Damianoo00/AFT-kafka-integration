@@ -1,46 +1,48 @@
 openapi: 3.0.3
 info:
   title: Kafka Reader Ingest API
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Kafka Reader Ingest API defines the REST contract used by the Kafka Reader
-    service to forward messages consumed from Kafka topics to downstream
-    services (e.g. Writer / Storage / Processor).
-    
-    The Kafka Reader polls a Kafka topic at a configurable interval and sends
-    each consumed message as a JSON payload to this API endpoint.
+    service to forward sliding-window sequences of messages consumed from Kafka
+    topics to downstream services.
+
+    The Kafka Reader maintains a window of N most recent ticks. Once the window
+    is full, it sends the entire sequence to this API endpoint.
 
 servers:
   - url: http://localhost:5000
-    description: Writer / Ingest Service
+    description: Writer / Processor / Downstream service
 
 tags:
   - name: ingest
-    description: Kafka message ingestion
+    description: Kafka message ingestion (sliding window)
 
 paths:
   /receive:
     post:
       tags: [ingest]
-      summary: Receive Kafka message
+      summary: Receive Kafka sliding window sequence
       description: >
-        Receives a single message consumed from Kafka.
-        
-        The Kafka Reader forwards:
-          - the Kafka topic name
-          - the raw message payload (as string)
-        
-        This endpoint is expected to be idempotent or handle
-        duplicate messages depending on consumer configuration.
+        Receives a fixed-size sequence of most recent messages consumed from Kafka.
+
+        Behavior:
+          * Reader decodes Kafka payloads from JSON strings to objects
+          * Messages are collected into a sliding window of size N (configurable)
+          * Once the window is full, it is sent as `sequence`
+          * Subsequent polls slide the window automatically
+
+        The endpoint SHOULD accept repeated sequences that overlap in values,
+        as sliding windows introduce natural duplication of history.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KafkaMessage"
+              $ref: "#/components/schemas/KafkaSequence"
       responses:
         "200":
-          description: Message successfully received
+          description: Sequence successfully received
           content:
             application/json:
               schema:
@@ -52,20 +54,30 @@ paths:
 
 components:
   schemas:
-    KafkaMessage:
+    KafkaSequence:
       type: object
       required:
         - topic
-        - message
+        - sequence
       properties:
         topic:
           type: string
-          description: Kafka topic name from which the message was consumed
-          example: test-topic
-        message:
-          type: string
-          description: Raw Kafka message payload (UTF-8 decoded)
-          example: '{"event":"trade_executed","symbol":"EURUSD","volume":0.2}'
+          description: Kafka topic name from which the messages were consumed
+          example: fx-ticks
+        sequence:
+          type: array
+          description: >
+            The most recent N decoded Kafka messages stored in a sliding window.
+            Each entry is a JSON object originally sent to the topic.
+          minItems: 1
+          items:
+            type: object
+            description: Decoded Kafka payload
+            example:
+              event: tick
+              symbol: EURUSD
+              price: 1.0876
+              ts: "2025-01-01T12:00:00.000Z"
 
     AckResponse:
       type: object
