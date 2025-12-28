@@ -48,19 +48,36 @@ services:
       - kafka-net
       - aft-external-net
 
-  kafka-reader:
+  tick-kafka-reader:
     build:
       context: ./adapter/reader
       dockerfile: Dockerfile
-    container_name: kafka-reader
+    container_name: tick-kafka-reader
     restart: unless-stopped
     environment:
       KAFKA_BOOTSTRAP: broker:29092
-      TOPIC: test-topic
-      API_URL: http://test:5000/print
-      PERIOD: 1
+      TOPIC: tick
+      API_URL: http://signal-engine:5000/signal
       GROUP_ID: reader-group
-      WINDOW_SIZE: 10
+      WINDOW_SIZE: 48
+    depends_on:
+      - broker
+    networks:
+      - kafka-net
+      - aft-external-net
+
+  signal-kafka-reader:
+    build:
+      context: ./adapter/reader
+      dockerfile: Dockerfile
+    container_name: signal-kafka-reader
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP: broker:29092
+      TOPIC: signal
+      API_URL: http://execution:5000/execution/place_order
+      GROUP_ID: reader-group
+      WINDOW_SIZE: 1
     depends_on:
       - broker
     networks:

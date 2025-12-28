@@ -8,7 +8,6 @@ from confluent_kafka import Consumer, KafkaException
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "broker:29092")
 TOPIC = os.getenv("TOPIC", "test-topic")
 API_URL = os.getenv("API_URL", "http://writer:5000/receive")
-PERIOD = float(os.getenv("PERIOD", "5"))
 GROUP_ID = os.getenv("GROUP_ID", "reader-group")
 WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))   # <-- NOWE
 
@@ -21,13 +20,12 @@ consumer = Consumer({
 consumer.subscribe([TOPIC])
 buffer = deque(maxlen=WINDOW_SIZE)  # <-- sliding window
 
-print(f"[reader] Start polling topic '{TOPIC}', window size={WINDOW_SIZE}, every {PERIOD}s ...")
+print(f"[reader] Start polling topic '{TOPIC}', window size={WINDOW_SIZE} ...")
 
 try:
     while True:
         msg = consumer.poll(timeout=1.0)
         if msg is None:
-            time.sleep(PERIOD)
             continue
         if msg.error():
             print(f"[reader] Kafka error: {msg.error()}")
@@ -71,7 +69,6 @@ try:
 
         # kolejne tiku przesuną okno automatycznie (deque maxlen)
         # kolejny poll doda nowy, najstarszy zniknie
-        time.sleep(PERIOD)
 
 except KeyboardInterrupt:
     print("[reader] Wyjście...")
