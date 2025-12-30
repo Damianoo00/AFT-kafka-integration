@@ -1,15 +1,15 @@
 import os
-import time
 import json
+import time
 import requests
-from collections import deque
+from collections import defaultdict, deque
 from confluent_kafka import Consumer, KafkaException
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "broker:29092")
 TOPIC = os.getenv("TOPIC", "test-topic")
 API_URL = os.getenv("API_URL", "http://writer:5000/receive")
 GROUP_ID = os.getenv("GROUP_ID", "reader-group")
-WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))   # <-- NOWE
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))
 
 consumer = Consumer({
     "bootstrap.servers": KAFKA_BOOTSTRAP,
@@ -18,7 +18,9 @@ consumer = Consumer({
 })
 
 consumer.subscribe([TOPIC])
-buffer = deque(maxlen=WINDOW_SIZE)  # <-- sliding window
+
+# 🔴 bufory per session_id
+session_windows = defaultdict(lambda: deque(maxlen=WINDOW_SIZE))
 
 print(f"[reader] Start polling topic '{TOPIC}', window size={WINDOW_SIZE} ...")
 
@@ -31,46 +33,55 @@ try:
             print(f"[reader] Kafka error: {msg.error()}")
             continue
 
-        payload_raw = msg.value().decode()
-        print(f"[reader] odebrano 1 tik: {payload_raw}")
+        raw = msg.value().decode()
+        print(f"[reader] tick: {raw}")
 
-        # Kafka przysyła string z JSON - zdekoduj do obiektu
         try:
-            tick = json.loads(payload_raw)
+            tick = json.loads(raw)
         except Exception as e:
-            print(f"[reader] Błąd JSON decode: {e} => {payload_raw}")
+            print(f"[reader] JSON decode error: {e} => {raw}")
             continue
 
         # ------------------------------
-        # SLIDING WINDOW
+        # WYCIĄGNIJ session_id I groupuj
         # ------------------------------
-        buffer.append(tick)  # dodaj najnowszy
-        print(f"[reader] okno ma: {len(buffer)}/{WINDOW_SIZE}")
-
-        # jeśli jeszcze za małe okno — czekamy
-        if len(buffer) < WINDOW_SIZE:
+        session_id = tick.get("session_id")
+        if not session_id:
+            print("[reader] brak session_id → ignoruję")
             continue
 
-        # mamy pełne N → wyślij sekwencję
-        sequence = list(buffer)   # kopia
-        data_to_send = {"topic": TOPIC, "sequence": sequence}
+        session_windows[session_id].append(tick)
+        win = session_windows[session_id]
+        print(f"[reader] session {session_id} → {len(win)}/{WINDOW_SIZE}")
 
-        print(f"[reader] wysyłam sekwencję ({WINDOW_SIZE} tików) do API...")
+        # jeśli za mało elementów → czekamy
+        if len(win) < WINDOW_SIZE:
+            continue
 
-        # wysyłka do REST API
+        # pełne okno → przygotuj payload
+        sequence = list(win)  # kopia
+
+        # 🔴 nowy format:
+        payload = {
+            "messages": [msg for t in sequence for msg in t["messages"]],
+            "session_id": session_id
+        }
+
+        print(f"[reader] wysyłam pełne okno session {session_id} → {WINDOW_SIZE} tików")
+
         try:
-            resp = requests.post(API_URL, json=data_to_send, timeout=5)
+            resp = requests.post(API_URL, json=payload, timeout=5)
             if resp.status_code == 200:
                 print(f"[reader] OK wysłano do API {API_URL}")
             else:
-                print(f"[reader] Błąd API: {resp.status_code} {resp.text}")
+                print(f"[reader] API error: {resp.status_code} {resp.text}")
         except Exception as e:
-            print(f"[reader] Błąd wysyłki do API: {e}")
+            print(f"[reader] wysyłka error: {e}")
 
-        # kolejne tiku przesuną okno automatycznie (deque maxlen)
-        # kolejny poll doda nowy, najstarszy zniknie
+        # kolejne ticki automatycznie przesuwają okno (deque maxlen)
+        # nic nie czyścimy — następne batch-e będą wysyłane gdy okno "przesunie się"
 
 except KeyboardInterrupt:
-    print("[reader] Wyjście...")
+    print("[reader] wyjście...")
 finally:
     consumer.close()
