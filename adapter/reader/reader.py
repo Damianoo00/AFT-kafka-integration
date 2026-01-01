@@ -10,6 +10,7 @@ TOPIC = os.getenv("TOPIC", "test-topic")
 API_URL = os.getenv("API_URL", "http://writer:5000/receive")
 GROUP_ID = os.getenv("GROUP_ID", "reader-group")
 WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))
+CLEAR_DEQUE = bool(os.getenv("CLEAR_DEQUE", "0"))
 
 consumer = Consumer({
     "bootstrap.servers": KAFKA_BOOTSTRAP,
@@ -26,7 +27,7 @@ print(f"[reader] Start polling topic '{TOPIC}', window size={WINDOW_SIZE} ...")
 
 try:
     while True:
-        msg = consumer.poll(timeout=1.0)
+        msg = consumer.poll(timeout=0.1)
         if msg is None:
             continue
         if msg.error():
@@ -77,6 +78,11 @@ try:
                 print(f"[reader] API error: {resp.status_code} {resp.text}")
         except Exception as e:
             print(f"[reader] wysyłka error: {e}")
+
+        # przesuwamy okno normalnie, chyba że CLEAR_DEQUE=1
+        if CLEAR_DEQUE:
+            print(f"[reader] CLEAR_DEQUE=1 → czyszczę okno session {session_id}")
+            win.clear()
 
         # kolejne ticki automatycznie przesuwają okno (deque maxlen)
         # nic nie czyścimy — następne batch-e będą wysyłane gdy okno "przesunie się"

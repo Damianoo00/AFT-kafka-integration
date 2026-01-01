@@ -58,7 +58,7 @@ services:
       KAFKA_BOOTSTRAP: broker:29092
       TOPIC: tick
       API_URL: http://signal-engine:5000/signal
-      GROUP_ID: reader-group
+      GROUP_ID: tick-group
       WINDOW_SIZE: 48
     depends_on:
       - broker
@@ -78,6 +78,43 @@ services:
       API_URL: http://execution:5000/execution/place_order
       GROUP_ID: reader-group
       WINDOW_SIZE: 1
+    depends_on:
+      - broker
+    networks:
+      - kafka-net
+      - aft-external-net
+
+  train-kafka-reader:
+    build:
+      context: ./adapter/reader
+      dockerfile: Dockerfile
+    container_name: train-kafka-reader
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP: broker:29092
+      TOPIC: tick
+      API_URL: http://model-trainer:5000/train
+      GROUP_ID: train-group
+      WINDOW_SIZE: 1000
+    depends_on:
+      - broker
+    networks:
+      - kafka-net
+      - aft-external-net
+
+  model-kafka-reader:
+    build:
+      context: ./adapter/reader
+      dockerfile: Dockerfile
+    container_name: model-kafka-reader
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP: broker:29092
+      TOPIC: model
+      API_URL: http://signal-engine:5000/reload_models
+      GROUP_ID: signal-group
+      WINDOW_SIZE: 1
+      CLEAR_DEQUE: 1
     depends_on:
       - broker
     networks:
