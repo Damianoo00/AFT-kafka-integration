@@ -31,6 +31,7 @@ services:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     networks:
       - kafka-net
+    restart: always
 
   kafka-writer:
     build:
@@ -95,7 +96,7 @@ services:
       TOPIC: tick
       API_URL: http://model-trainer:5000/train
       GROUP_ID: train-group
-      WINDOW_SIZE: 1000
+      WINDOW_SIZE: 26280
     depends_on:
       - broker
     networks:

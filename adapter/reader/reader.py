@@ -51,6 +51,11 @@ try:
             print("[reader] brak session_id → ignoruję")
             continue
 
+        request_time = tick.get("request_time")
+        if not request_time:
+            print("[reader] brak request_time → ignoruję")
+            continue
+
         session_windows[session_id].append(tick)
         win = session_windows[session_id]
         print(f"[reader] session {session_id} → {len(win)}/{WINDOW_SIZE}")
@@ -65,7 +70,8 @@ try:
         # 🔴 nowy format:
         payload = {
             "messages": [msg for t in sequence for msg in t["messages"]],
-            "session_id": session_id
+            "session_id": session_id,
+            "request_time": request_time,
         }
 
         print(f"[reader] wysyłam pełne okno session {session_id} → {WINDOW_SIZE} tików")
